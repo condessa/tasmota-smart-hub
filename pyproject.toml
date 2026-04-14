@@ -1,0 +1,10 @@
+[project]
+name = "tasmota-smart-hub"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "paho-mqtt>=2.0",
+    "pillow>=10.0",
+]
