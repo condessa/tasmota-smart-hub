@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.spec
+
+# UV / venv
+.venv/
+.uv/
+uv.lock
+
+# Configuração local (contém credenciais MQTT)
+tasmota_mqtt_config.json
+
+# PyInstaller
+*.manifest
+*.exe
+
+# Pacotes
+*.deb
+deb_build/
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.swp
+*~
+publicar_github.sh
