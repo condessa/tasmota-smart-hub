@@ -7,7 +7,7 @@
 set -e
 
 APP_NAME="tasmota-smart-hub"
-VERSION="1.0.1"
+VERSION="1.0.2"
 ARCH="amd64"
 MAINTAINER="HCsoftware <hcsoftware@email.com>"
 DESCRIPTION="Gestão de dispositivos IoT Tasmota via MQTT"
@@ -78,6 +78,17 @@ Description: ${DESCRIPTION}
  a comandos, rules, log MQTT e configuração de broker.
 EOF
 
+# ── 4b. postinst: refrescar o menu ─────────────
+cat > "${PKG_DIR}/DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications || true
+fi
+exit 0
+EOF
+chmod 755 "${PKG_DIR}/DEBIAN/postinst"
+
 # ── 5. Ficheiro .desktop ───────────────────────
 echo "[5/6] A criar entrada .desktop..."
 cat > "${PKG_DIR}${DESKTOP_DIR}/${APP_NAME}.desktop" <<EOF
@@ -86,7 +97,7 @@ Version=1.0
 Type=Application
 Name=Tasmota Smart Hub
 Comment=${DESCRIPTION}
-Exec=${INSTALL_DIR}/${APP_NAME}
+Exec="${INSTALL_DIR}/${APP_NAME}"
 Icon=${APP_NAME}
 Terminal=false
 Categories=Utility;Network;
