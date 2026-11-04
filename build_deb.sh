@@ -7,7 +7,7 @@
 set -e
 
 APP_NAME="tasmota-smart-hub"
-VERSION="1.0.0"
+VERSION="1.0.1"
 ARCH="amd64"
 MAINTAINER="HCsoftware <hcsoftware@email.com>"
 DESCRIPTION="Gestão de dispositivos IoT Tasmota via MQTT"
@@ -23,14 +23,17 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # ── 1. Verificar dependências ──────────────────
 echo "[1/6] A verificar dependências..."
-command -v pyinstaller >/dev/null 2>&1 || {
-    echo "  → PyInstaller não encontrado. A instalar..."
+if command -v pyinstaller >/dev/null 2>&1; then
+    PYINSTALLER="pyinstaller"
+else
+    echo "  → PyInstaller não encontrado. A instalar com uv..."
     uv tool install pyinstaller
-}
+    PYINSTALLER="uv run pyinstaller"
+fi
 
 # ── 2. Gerar executável ────────────────────────
 echo "[2/6] A compilar com PyInstaller..."
-uv run pyinstaller \
+$PYINSTALLER \
     --onefile \
     --windowed \
     --name "$APP_NAME" \

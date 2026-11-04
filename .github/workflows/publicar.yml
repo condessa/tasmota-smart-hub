@@ -1,0 +1,109 @@
+name: Publicar (.exe e .deb)
+
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versão a publicar (ex.: 1.0.1). Vazio para só gerar artefactos."
+        required: false
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Compilar com PyInstaller
+        run: >
+          pyinstaller --onefile --windowed --name TasmotaSmartHub
+          --add-data "imagens;imagens" --icon "imagens/HCsoftware.png" main.py
+
+      - name: Verificar o executável
+        shell: pwsh
+        run: |
+          $exe = "dist/TasmotaSmartHub.exe"
+          if (-not (Test-Path $exe)) { throw "O PyInstaller não gerou $exe" }
+          $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "OK: $exe — $mb MB"
+          if ($mb -lt 5) { throw "Executável demasiado pequeno ($mb MB)" }
+
+      - name: Nome com a versão (tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart("v")
+          Move-Item dist/TasmotaSmartHub.exe "dist/TasmotaSmartHub-$v.exe"
+
+      - name: Guardar artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: TasmotaSmartHub-windows
+          path: dist/TasmotaSmartHub*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publicar na release (tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Tasmota Smart Hub ${{ github.ref_name }}
+          files: dist/TasmotaSmartHub-*.exe
+          body: |
+            Aplicação desktop (`.exe`) para gerir dispositivos Tasmota via MQTT.
+
+            Duplo clique para executar. O Windows avisa que não é assinado:
+            «Mais informações» → «Executar mesmo assim».
+
+  debian:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar ferramentas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+          pip install -r requirements.txt pyinstaller
+
+      - name: Construir o .deb
+        run: bash build_deb.sh
+
+      - name: Verificar o pacote
+        run: |
+          DEB=$(ls -t tasmota-smart-hub_*.deb | head -1)
+          ls -lh "$DEB"
+          dpkg-deb -I "$DEB"
+          dpkg-deb -c "$DEB" | grep -E "HCsoftware|tasmota-smart-hub" | head
+
+      - name: Guardar artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: TasmotaSmartHub-debian
+          path: tasmota-smart-hub_*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publicar na release (tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tasmota-smart-hub_*.deb
