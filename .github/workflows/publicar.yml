@@ -31,7 +31,7 @@ jobs:
       - name: Compilar com PyInstaller
         run: >
           pyinstaller --onefile --windowed --name TasmotaSmartHub
-          --add-data "imagens;imagens" --icon "imagens/HCsoftware.png" main.py
+          --add-data "imagens;imagens" --icon "imagens/icone.ico" main.py
 
       - name: Verificar o executável
         shell: pwsh

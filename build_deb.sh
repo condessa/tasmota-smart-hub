@@ -7,7 +7,7 @@
 set -e
 
 APP_NAME="tasmota-smart-hub"
-VERSION="1.0.2"
+VERSION="1.0.3"
 ARCH="amd64"
 MAINTAINER="HCsoftware <hcsoftware@email.com>"
 DESCRIPTION="Gestão de dispositivos IoT Tasmota via MQTT"
@@ -38,7 +38,7 @@ $PYINSTALLER \
     --windowed \
     --name "$APP_NAME" \
     --add-data "imagens:imagens" \
-    --icon "imagens/HCsoftware.png" \
+    --icon "imagens/icone.png" \
     main.py
 
 # ── 3. Criar estrutura do pacote ───────────────
@@ -55,7 +55,7 @@ cp "dist/${APP_NAME}" "${PKG_DIR}${INSTALL_DIR}/${APP_NAME}"
 chmod +x "${PKG_DIR}${INSTALL_DIR}/${APP_NAME}"
 
 # Copiar ícone
-cp imagens/HCsoftware.png "${PKG_DIR}${ICON_DIR}/${APP_NAME}.png"
+cp imagens/icone.png "${PKG_DIR}${ICON_DIR}/${APP_NAME}.png"
 
 # Symlink em /usr/local/bin
 ln -sf "${INSTALL_DIR}/${APP_NAME}" \

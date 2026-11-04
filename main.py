@@ -7,7 +7,23 @@ import os
 import datetime
 from PIL import Image, ImageDraw, ImageTk
 
-CONFIG_FILE = "tasmota_mqtt_config.json"
+def _config_dir():
+    if os.name == "nt":
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        pasta = os.path.join(base, "HCsoftware", "TasmotaSmartHub")
+    else:
+        base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+        pasta = os.path.join(base, "tasmota-smart-hub")
+    try:
+        os.makedirs(pasta, exist_ok=True)
+    except OSError:
+        pass
+    return pasta
+
+
+CONFIG_DIR = _config_dir()
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+CONFIG_ANTIGO = "tasmota_mqtt_config.json"
 
 # ─────────────────────────────────────────────
 #  Paleta AluminioManager / HCsoftware
@@ -899,23 +915,34 @@ class TasmotaSmartHub:
     #  Configuração
     # ──────────────────────────────────────────
     def load_config(self):
-        if os.path.exists(CONFIG_FILE):
+        candidatos = [CONFIG_FILE, CONFIG_ANTIGO,
+                      os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_ANTIGO)]
+        for caminho in candidatos:
+            if not os.path.exists(caminho):
+                continue
             try:
-                with open(CONFIG_FILE, "r") as f:
-                    return json.load(f)
-            except:
-                return None
+                with open(caminho, "r", encoding="utf-8") as f:
+                    conf = json.load(f)
+            except Exception:
+                continue
+            if caminho != CONFIG_FILE:
+                try:
+                    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                        json.dump(conf, f)
+                    os.chmod(CONFIG_FILE, 0o600)
+                except OSError:
+                    pass
+            return conf
         return None
 
     def open_config_window(self):
         win = tk.Toplevel(self.root)
         win.title("Configurar Broker MQTT")
-        win.geometry("340x340")
+        win.geometry("420x480")
+        win.minsize(400, 460)
         win.configure(bg=BG_MAIN)
         win.grab_set()
-        win.resizable(False, False)
 
-        # Topbar da janela
         top = tk.Frame(win, bg=BG_TOPBAR)
         top.pack(fill=tk.X)
         tk.Label(top, text="⚙  Broker MQTT",
@@ -924,53 +951,96 @@ class TasmotaSmartHub:
                  padx=16, pady=12).pack(side=tk.LEFT)
         tk.Frame(win, bg=BORDER, height=1).pack(fill=tk.X)
 
-        body = tk.Frame(win, bg=BG_MAIN, padx=20, pady=16)
-        body.pack(fill=tk.BOTH, expand=True)
+        # rodapé fixo (fica sempre visível)
+        foot = tk.Frame(win, bg=BG_TOPBAR, padx=16, pady=10)
+        foot.pack(side=tk.BOTTOM, fill=tk.X)
+        tk.Frame(win, bg=BORDER, height=1).pack(side=tk.BOTTOM, fill=tk.X)
 
-        fields  = ["host", "port", "user", "pass"]
-        labels  = ["Host / IP", "Porta", "Utilizador", "Password"]
+        body = tk.Frame(win, bg=BG_MAIN, padx=20, pady=14)
+        body.pack(fill=tk.BOTH, expand=True)
+        body.grid_columnconfigure(1, weight=1)
+
+        campos = [
+            ("Host / IP",   "host", False, "ex.: 192.168.1.10"),
+            ("Porta",       "port", False, "1883"),
+            ("Utilizador",  "user", False, "opcional"),
+            ("Password",    "pass", True,  "opcional"),
+        ]
         entries = {}
-        for f, lbl in zip(fields, labels):
+        for linha, (lbl, chave, segredo, dica) in enumerate(campos):
             tk.Label(body, text=lbl, bg=BG_MAIN, fg=TEXT_MUT,
-                     font=("Segoe UI", 8, "bold")).pack(anchor="w")
+                     font=("Segoe UI", 8, "bold")).grid(
+                         row=linha*2, column=0, sticky="w", pady=(0, 2))
             e = tk.Entry(body, bg=BG_INPUT, fg=TEXT_PRI,
-                          insertbackground=TEXT_PRI,
-                          bd=0, font=("Segoe UI", 10),
-                          relief="flat",
-                          highlightthickness=1,
-                          highlightbackground=BORDER,
-                          highlightcolor=ACCENT,
-                          show="*" if f == "pass" else "")
-            e.pack(fill=tk.X, ipady=5, pady=(2, 10))
-            if self.config:
-                e.insert(0, self.config.get(f, ""))
-            entries[f] = e
+                         insertbackground=TEXT_PRI, bd=0,
+                         font=("Segoe UI", 10), relief="flat",
+                         highlightthickness=1,
+                         highlightbackground=BORDER, highlightcolor=ACCENT,
+                         show="*" if segredo else "")
+            e.grid(row=linha*2+1, column=0, columnspan=2, sticky="ew", ipady=5,
+                   pady=(0, 10))
+            valor = (self.config or {}).get(chave, "")
+            e.insert(0, "" if valor is None else str(valor))
+            if not valor:
+                e.insert(0, "")
+            entries[chave] = e
+
+        mostrar = tk.BooleanVar(value=False)
+        tk.Checkbutton(body, text="Mostrar password", variable=mostrar,
+                       bg=BG_MAIN, fg=TEXT_SEC, selectcolor=BG_INPUT,
+                       activebackground=BG_MAIN, activeforeground=TEXT_PRI,
+                       font=("Segoe UI", 8),
+                       command=lambda: entries["pass"].config(
+                           show="" if mostrar.get() else "*")).grid(
+                               row=8, column=0, sticky="w", pady=(0, 6))
+
+        tk.Label(body,
+                 text="As credenciais ficam guardadas apenas neste computador.\n"
+                      "Deixe utilizador/password vazios se o broker não exigir autenticação.",
+                 bg=BG_MAIN, fg=TEXT_MUT, justify="left",
+                 font=("Segoe UI", 8)).grid(row=9, column=0, columnspan=2, sticky="w")
 
         def save():
-            new_conf = {f: entries[f].get() for f in fields}
+            host = entries["host"].get().strip()
+            if not host:
+                messagebox.showerror("Erro", "Indique o endereço do broker.")
+                return
             try:
-                new_conf["port"] = int(new_conf["port"])
+                porta = int(entries["port"].get().strip() or "1883")
             except ValueError:
                 messagebox.showerror("Erro", "Porta inválida.")
                 return
-            with open(CONFIG_FILE, "w") as fp:
-                json.dump(new_conf, fp)
-            self.config = new_conf
+            if not (1 <= porta <= 65535):
+                messagebox.showerror("Erro", "A porta deve estar entre 1 e 65535.")
+                return
+            novo = {
+                "host": host,
+                "port": porta,
+                "user": entries["user"].get().strip(),
+                "pass": entries["pass"].get(),
+            }
+            try:
+                with open(CONFIG_FILE, "w", encoding="utf-8") as fp:
+                    json.dump(novo, fp)
+                try:
+                    os.chmod(CONFIG_FILE, 0o600)
+                except OSError:
+                    pass
+            except OSError as erro:
+                messagebox.showerror("Erro", f"Não foi possível guardar:\n{erro}")
+                return
+            self.config = novo
             win.destroy()
             self.start_mqtt()
 
-        tk.Frame(win, bg=BORDER, height=1).pack(fill=tk.X)
-        foot = tk.Frame(win, bg=BG_TOPBAR, padx=16, pady=10)
-        foot.pack(fill=tk.X)
-        tk.Button(foot, text="  SALVAR E LIGAR  ",
+        tk.Button(foot, text="  GUARDAR E LIGAR  ",
                   command=save,
-                  bg=ACCENT, fg="#ffffff",
-                  bd=0, pady=7,
-                  font=("Segoe UI", 9, "bold"),
-                  cursor="hand2",
-                  activebackground=ACCENT_HOV,
-                  activeforeground="#ffffff",
+                  bg=ACCENT, fg="#ffffff", bd=0, pady=7,
+                  font=("Segoe UI", 9, "bold"), cursor="hand2",
+                  activebackground=ACCENT_HOV, activeforeground="#ffffff",
                   relief="flat").pack(fill=tk.X)
+
+        entries["host"].focus_set()
 
     # ──────────────────────────────────────────
     #  MQTT (inalterado)
@@ -1087,5 +1157,12 @@ class TasmotaSmartHub:
 
 if __name__ == "__main__":
     root = tk.Tk()
+    try:
+        _base = os.path.dirname(os.path.abspath(__file__))
+        _ico = Image.open(os.path.join(_base, "imagens", "icone.png")).resize((64, 64))
+        root._icone = ImageTk.PhotoImage(_ico)
+        root.iconphoto(True, root._icone)
+    except Exception:
+        pass
     app  = TasmotaSmartHub(root)
     root.mainloop()
