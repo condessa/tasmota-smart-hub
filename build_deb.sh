@@ -7,7 +7,7 @@
 set -e
 
 APP_NAME="tasmota-smart-hub"
-VERSION="1.0.3"
+VERSION="1.0.4"
 ARCH="amd64"
 MAINTAINER="HCsoftware <hcsoftware@email.com>"
 DESCRIPTION="Gestão de dispositivos IoT Tasmota via MQTT"
@@ -38,6 +38,7 @@ $PYINSTALLER \
     --windowed \
     --name "$APP_NAME" \
     --add-data "imagens:imagens" \
+    --hidden-import PIL._tkinter_finder \
     --icon "imagens/icone.png" \
     main.py
 
